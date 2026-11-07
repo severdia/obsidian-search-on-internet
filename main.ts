@@ -1,14 +1,12 @@
 import {Editor, EventRef, MarkdownPreviewView, MarkdownView, Menu, MenuItem, Notice, Plugin, TFile} from 'obsidian';
 import {SOISettingTab, SOISettings, DEFAULT_SETTING, SearchSetting, DEFAULT_QUERY} from './settings';
-import open from 'open';
+const {shell} = require('electron');
 import {SearchModal} from './modal';
 import {SearchView} from './view';
 
 
 export default class SearchOnInternetPlugin extends Plugin {
     settings: SOISettings;
-    onDom: any;
-    onDomSettings: any;
 
     async onload() {
       console.log('loading search-on-internet');
@@ -19,7 +17,7 @@ export default class SearchOnInternetPlugin extends Plugin {
       const plugin = this;
       this.registerEvent(
           this.app.workspace.on('file-menu', (menu, file: TFile, source: string) => {
-            if (file === null) {
+            if (!(file instanceof TFile)) {
               return;
             }
             const fileTags = this.app.metadataCache.getFileCache(file)
@@ -56,10 +54,10 @@ export default class SearchOnInternetPlugin extends Plugin {
       });
 
       // Preview mode
-      this.onDom = function(event: MouseEvent) {
-        const fileMenu = new Menu(plugin.app);
-        // @ts-ignore
-        fileMenu.dom.classList.add('soi-file-menu');
+      this.registerDomEvent(document, 'contextmenu', (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if (!target?.closest?.('.markdown-preview-view')) return;
+        const fileMenu = new Menu();
         // Functionality: Open external link in Iframe.
         let emptyMenu = true;
         if (event.target) {
@@ -83,14 +81,14 @@ export default class SearchOnInternetPlugin extends Plugin {
             emptyMenu = false;
           }
         }
-        emptyMenu = emptyMenu && !plugin.handleContext(fileMenu);
+        const selection = target.ownerDocument.getSelection()?.toString() ?? '';
+        const hasSearchItems = plugin.handleContext(fileMenu, selection);
+        emptyMenu = emptyMenu && !hasSearchItems;
         if (!emptyMenu) {
           fileMenu.showAtPosition({x: event.x, y: event.y});
           event.preventDefault();
         }
-      };
-      this.onDomSettings = {};
-      document.on('contextmenu', '.markdown-preview-view', this.onDom, this.onDomSettings);
+      });
 
 
       // Remove this ignore when the obsidian package is updated on npm
@@ -98,23 +96,18 @@ export default class SearchOnInternetPlugin extends Plugin {
       // @ts-ignore
       this.registerEvent(this.app.workspace.on('editor-menu',
           (menu: Menu, editor: Editor, view: MarkdownView) => {
-            this.handleContext(menu );
+            this.handleContext(menu, editor.getSelection());
           }));
     }
 
     getSelectedText(): string {
-      const wSelection = window.getSelection();
-      const docSelection = document?.getSelection();
-      if (wSelection) {
-        return wSelection.toString();
-      } else if (document && docSelection.type != 'Control') {
-        return docSelection.toString();
-      }
-      return null;
+      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (view?.getMode() === 'source') return view.editor.getSelection();
+      const doc = view?.containerEl.ownerDocument ?? document;
+      return doc.getSelection()?.toString() ?? '';
     }
 
-    handleContext(menu: Menu): boolean {
-      const query = this.getSelectedText();
+    handleContext(menu: Menu, query = this.getSelectedText()): boolean {
       const hasSelection = !(query === null || query.trim() === '');
       if (!hasSelection) {
         return false;
@@ -148,13 +141,12 @@ export default class SearchOnInternetPlugin extends Plugin {
           await leaf.open(view);
         }
       } else {
-        await open(url);
+        await shell.openExternal(url);
       }
     }
 
     onunload() {
       console.log('unloading search-on-internet');
-      document.off('contextmenu', '.markdown-preview-view', this.onDom, this.onDomSettings);
     }
 
     async loadSettings() {

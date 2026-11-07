@@ -58,3 +58,9 @@ You can also disable the iframe search and open the search in your browser.
 Settings code is mainly taken from the [Templater plugin](https://github.com/SilentVoid13/Templater) by [SilentVoid13](https://github.com/SilentVoid13)
 
 Modal code is inspired by the [Citation plugin](https://github.com/hans/obsidian-citation-plugin/blob/master/src/modals.ts)
+
+## Building the compatibility fix
+
+Run `npm install`, `npm run build`, and `npm test` with Node.js 18 or newer. Copy `main.js`, `manifest.json`, and `styles.css` into the vault’s `.obsidian/plugins/search-on-internet/` folder and enable the plugin. Keep any existing `data.json` to preserve settings.
+
+The build targets ES2018 to support native Obsidian API classes. Browser searches use Electron’s built-in URL opener. Editor context menus read the selection from Obsidian’s editor API.
